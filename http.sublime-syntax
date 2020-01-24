@@ -1,0 +1,126 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/3/syntax.html
+
+name: HTTP
+file_extensions: [http]
+first_line_match: '\b(OPTIONS|GET|HEAD|POST|PUT|DELETE|TRACE|CONNECT|PATCH) '
+scope: source.http
+
+variables:
+  separator: '###'
+  script_start: "> {%"
+contexts:
+  # The prototype context is prepended to all contexts but those setting
+  # meta_include_prototype: false.
+  prototype:
+    - include: comments
+    - include: inline-script-start
+
+  main:
+    # let our prototype values be included by request
+    - meta_include_prototype: false
+    - include: request
+    - include: request-separator
+
+  request:
+    - meta_scope: meta.class.http
+    - include: request-line
+
+  request-line:
+    - include: methods
+
+  methods:
+    - match: '\b(OPTIONS|GET|HEAD|POST|PUT|DELETE|TRACE|CONNECT|PATCH) '
+      scope: constant.language
+      set: url-string
+
+  url-string:
+    - match: "[^\\S]"
+      scope: string.quoted.single.http
+    - match: " *"
+      set: http-version
+
+  http-version:
+    - match: "HTTP\/[0-9.]+"
+      scope: keyword.control.http
+      # if we don't match on HTTP, continue regardless of what we find
+    - match: " *\n"
+      set: header-line
+
+  header-line:
+    - match: "\n"
+      set: request-body
+    - include: header-field
+
+  header-field:
+    - match: "[^:]"
+      scope: string.quoted.single.http
+    - match: ":"
+      scope: keyword.operator.logical.http
+      set: header-value
+
+  header-value:
+    # - meta_scope: constant.language
+    - match: "\n"
+      set: header-line
+
+  request-body:
+    - match: (?=\S*{)
+      # Why does JSON not live in the Packages directory?
+      push: JSON.sublime-syntax
+      with_prototype:
+        - include: break-request-body
+    - match: (?=\S*<)
+      push: XML.sublime-syntax
+      with_prototype:
+        - include: break-request-body
+    - include: break-request-body
+
+  break-request-body:
+    - match: "(?={{separator}}|{{script_start}})"
+      set: request-body-end
+    # manually inject our prototype into the embedded languages
+    - include: prototype
+
+  request-body-end:
+    - meta_include_prototype: false
+    - include: request-separator
+    - include: handler-script
+
+  handler-script:
+    - match: "{{script_start}}"
+      scope: punctuation.section.interpolation.begin.http
+      push: Javascript.sublime-syntax
+      with_prototype:
+        - include: prototype
+        - match: "%}"
+          scope: punctuation.section.interpolation.end.http
+          set: request-separator
+
+  inline-script-start:
+    - match: "{{"
+      scope: punctuation.definition.variable.http
+      push: inline-script
+
+  inline-script:
+    - meta_scope: variable.other.http
+    - match: "}}"
+      scope: punctuation.definition.variable.http
+      pop: true
+
+  request-separator:
+    - meta_include_prototype: false
+    - match: "###"
+      scope: keyword.other.special-method.http
+      set: main
+
+  comments:
+    - match: '#'
+      scope: punctuation.definition.comment.http
+      push:
+        # This is an anonymous context push for brevity.
+        - meta_scope: comment.line.double-slash.http
+        - match: "[^\n]*"
+        - match: ""
+          pop: true
